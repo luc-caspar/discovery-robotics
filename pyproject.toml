@@ -1,0 +1,12 @@
+[project]
+name = "disco-robot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dm-control>=1.0.36",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "pillow>=12.1.0",
+]
