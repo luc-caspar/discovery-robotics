@@ -164,6 +164,10 @@ class StackCubeTask(composer.Task):
         self._manip_left.set_pose(physics, (0.5, 0.5, 0))
         self._manip_right.set_pose(physics, (-0.5, -0.5, 0))
 
+        # Randomize joints position on both arms
+        self._manip_left.arm.randomize_arm_joints(physics, random_state)
+        self._manip_right.arm.randomize_arm_joints(physics, random_state)
+
         # TODO: Set initial position of cubes
         self._cube_tgt.set_pose(physics, (0, 0, 0))
         self._cube_mv.set_pose(physics, (0.75, 0.25, 0))
