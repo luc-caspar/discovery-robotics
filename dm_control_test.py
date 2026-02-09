@@ -135,7 +135,7 @@ if __name__ == "__main__":
     mjc_model = physics.model._model
 
     # Launch the mujoco viewer (this will run the simulation from keyframe 0)
-    mjcv.launch(model._model, data._data)
+    mjcv.launch(mjc_model, mjc_data)
 
     exit()
 
