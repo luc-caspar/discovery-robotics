@@ -15,6 +15,7 @@ import mujoco.viewer as mjcv
 class Jaco(composer.Entity):
     """
     Defines a full Jaco manipulator made of an arm and accompanying hand.
+    The XML formatted definitions for the arm and hand can be found at: `/home/dlc/Workspaces/DiscoveryRobotics/.venv/lib/python3.12/site-packages/dm_control/third_party/kinova`
     """
 
     def _build(self, name=None, pinch_as_tcp=False):
@@ -80,7 +81,7 @@ class Cube(Primitive):
     Defines a cube primitive, with observable position, orientation, and velocities.
     """
 
-    def _build(self, size, name=None, mass=None, rgba=(0.5, 0.5, 0.5, 1)):
+    def _build(self, size, name=None, mass=1, rgba=(0.5, 0.5, 0.5, 1), **kwargs):
         # /!\ size is the half-size along each axis
         # Translate integer size into tuple
         if not isinstance(size, tuple):
@@ -88,9 +89,7 @@ class Cube(Primitive):
 
         # Delegate the instantiation of the actual entity and its observables to the parent class
         if mass is not None:
-            super()._build(geom_type='box', size=size, name=name, rgba=rgba, mass=mass)
-        else:
-            super()._build(geom_type='box', size=size, name=name, rgba=rgba)
+            super()._build(geom_type='box', size=size, name=name, rgba=rgba, mass=mass, **kwargs)
 
 
 class StackCubeTask(composer.Task):
@@ -108,8 +107,9 @@ class StackCubeTask(composer.Task):
         self._manip_right = Jaco(name='right', pinch_as_tcp=True)
 
         # Instantiate target and movable cubes
-        self._cube_tgt = Cube(0.01, name='target', rgba=(1, 0, 0, 1))
-        self._cube_mv = Cube(0.01, name='movable', rgba=(0, 1, 0, 1))
+        self._cube_tgt = Cube(size=0.05, name='target', rgba=(1, 0, 0, 1))
+        # Since the friction is isotropic (applies in the same way to all directions), do not mess with it or it will make the whole cube impossible to pickup
+        self._cube_mv = Cube(size=0.05, name='movable', rgba=(0, 1, 0, 1), mass=5)
 
         # Attach all entities to the arena
         self._arena.attach(self._manip_left)
@@ -160,17 +160,17 @@ class StackCubeTask(composer.Task):
     def initialize_episode(self, physics, random_state):
         self._physics_variator.apply_variations(physics, random_state)
         # TODO: Randomize positions of cubes within arms' work area
-        # TODO: Set initial position and orientation of manipulators
-        self._manip_left.set_pose(physics, (0.5, 0.5, 0))
-        self._manip_right.set_pose(physics, (-0.5, -0.5, 0))
+        # TODO: Randomize position of manipulators?
+        self._manip_left.set_pose(physics, (0.25, 0.25, 0))
+        self._manip_right.set_pose(physics, (-0.25, -0.25, 0))
 
         # Randomize joints position on both arms
         self._manip_left.arm.randomize_arm_joints(physics, random_state)
         self._manip_right.arm.randomize_arm_joints(physics, random_state)
 
         # TODO: Set initial position of cubes
-        self._cube_tgt.set_pose(physics, (0, 0, 0))
-        self._cube_mv.set_pose(physics, (0.75, 0.25, 0))
+        self._cube_tgt.set_pose(physics, (0, 0, 0.05))
+        self._cube_mv.set_pose(physics, (0.75, 0.25, 0.05))
 
     def get_reward(self, physics):
         # TODO: define reward function
