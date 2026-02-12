@@ -1,6 +1,7 @@
 #!/usr/bin/env
 from dm_control import composer
 from dm_control.composer import variation
+from dm_control.composer.variation import distributions
 
 from dm_control.entities.props import Primitive
 from dm_control.entities.manipulators.kinova.jaco_arm import JacoArm, JacoArmObservables
@@ -10,6 +11,9 @@ from dm_control.composer.observation import observable
 
 import numpy as np
 import mujoco.viewer as mjcv
+
+
+CUBE_SIZE = 0.1
 
 
 class Jaco(composer.Entity):
@@ -92,6 +96,23 @@ class Cube(Primitive):
             super()._build(geom_type='box', size=size, name=name, rgba=rgba, mass=mass, **kwargs)
 
 
+class UniformCircle(variation.Variation):
+    """
+    Pick as random coordinate on a circle of radius `radius`.
+    """
+
+    def __init__(self, radius):
+        self._radius = radius
+        self._heading = distributions.Uniform(0, 2 * np.pi)
+
+    def __call__(self, initial_value=None, current_value=None, random_state=None):
+        # Evaluate the variators to get the actual radius and heading
+        radius, heading = variation.evaluate((self._radius, self._heading), random_state=random_state)
+
+        # Return the corresponding point on the circle
+        return (radius * np.cos(heading), radius * np.sin(heading), 0)
+
+
 class StackCubeTask(composer.Task):
     """
     Define an environment with two robot arms and two cubes.
@@ -107,9 +128,9 @@ class StackCubeTask(composer.Task):
         self._manip_right = Jaco(name='right', pinch_as_tcp=True)
 
         # Instantiate target and movable cubes
-        self._cube_tgt = Cube(size=0.05, name='target', rgba=(1, 0, 0, 1))
+        self._cube_tgt = Cube(size=CUBE_SIZE / 2, name='target', rgba=(1, 0, 0, 1))
         # Since the friction is isotropic (applies in the same way to all directions), do not mess with it or it will make the whole cube impossible to pickup
-        self._cube_mv = Cube(size=0.05, name='movable', rgba=(0, 1, 0, 1), mass=5)
+        self._cube_mv = Cube(size=CUBE_SIZE / 2, name='movable', rgba=(0, 1, 0, 1), mass=5)
 
         # Attach all entities to the arena
         self._arena.attach(self._manip_left)
@@ -117,14 +138,11 @@ class StackCubeTask(composer.Task):
         self._arena.attach(self._cube_tgt)  # Target cube is immovable
         self._arena.add_free_entity(self._cube_mv)  # Movable cube is movable
 
-        # TODO: Configure arms' position, and random initial orientation
-        # TODO: Configure initial poses based on defined Variation for cubes
-
-        # Configure variators
+        # Configure global variators
         self._mjcf_variator = variation.MJCFVariator()
         self._physics_variator = variation.PhysicsVariator()
 
-        # TODO: Configure and enable observables
+        # Configure and enable observables
         self._observables = {}
         self._manip_left.observables.enable_all()
         self._observables['manip_left'] = self._manip_left.observables
@@ -159,18 +177,22 @@ class StackCubeTask(composer.Task):
 
     def initialize_episode(self, physics, random_state):
         self._physics_variator.apply_variations(physics, random_state)
-        # TODO: Randomize positions of cubes within arms' work area
-        # TODO: Randomize position of manipulators?
-        self._manip_left.set_pose(physics, (0.25, 0.25, 0))
-        self._manip_right.set_pose(physics, (-0.25, -0.25, 0))
+
+        # Randomize position of both manipulators
+        init_arm_pos = variation.evaluate(UniformCircle(distributions.Uniform(CUBE_SIZE, 0.4)))
+        self._manip_left.set_pose(physics, position=init_arm_pos)
+        self._manip_right.set_pose(physics, position=tuple(-e for e in init_arm_pos))
 
         # Randomize joints position on both arms
         self._manip_left.arm.randomize_arm_joints(physics, random_state)
         self._manip_right.arm.randomize_arm_joints(physics, random_state)
 
-        # TODO: Set initial position of cubes
-        self._cube_tgt.set_pose(physics, (0, 0, 0.05))
-        self._cube_mv.set_pose(physics, (0.75, 0.25, 0.05))
+        # Set target cube at the center (=origin) of the arena
+        self._cube_tgt.set_pose(physics, position=(0, 0, 0.05))
+        # Randomize positions of moveable cube within arms' work area
+        init_cube_radius = distributions.Uniform(CUBE_SIZE, 0.8 - np.sqrt(np.sum(np.pow(init_arm_pos, 2))))
+        init_cube_pos = variation.evaluate(UniformCircle(init_cube_radius))
+        self._cube_mv.set_pose(physics, position=(init_cube_pos[0], init_cube_pos[1], 0.05))
 
     def get_reward(self, physics):
         # TODO: define reward function
